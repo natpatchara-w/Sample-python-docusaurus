@@ -1,4 +1,5 @@
 name: Python build and test
+run-name: Python build and test
 on: [push]
 jobs:
   build-and-test:

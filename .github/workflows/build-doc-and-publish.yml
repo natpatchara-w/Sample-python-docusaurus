@@ -1,0 +1,98 @@
+name: Python documents generating with docusaurus
+run-name: Python documents generating with docusaurus
+
+on:
+  push:
+    branches:
+      - main
+    # Review gh actions docs if you want to further define triggers, paths, etc
+    # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#on
+
+  
+
+jobs:
+
+  build-markdown:
+    name: Build Markdowns
+
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          architecture: 'x64'
+
+      - name: Download python dependancy
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build docusaurus markdown
+        run: |
+          pydoc-markdown
+
+      - name: Upload Markdown artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pydoc-markdown
+          path: doc/docs/reference/
+
+  build-docusaurus:
+    name: Build Docusaurus
+    needs: build-markdown
+
+    runs-on: ubuntu-latest
+    steps:
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: 
+          yarn install --frozen-lockfile
+        working-directory: doc/
+
+      - name: Download pydoc markdown
+        uses: actions/download-artifact@v4
+        with:
+          name: pydoc-markdown
+          path: doc/docs/reference/
+
+      - name: Build website
+        run: yarn build
+        working-directory: doc/
+
+      - name: Upload Build Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: doc/build
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build-docusaurus
+
+    # Grant GITHUB_TOKEN the permissions required to make a Pages deployment
+    permissions:
+      pages: write # to deploy to Pages
+      id-token: write # to verify the deployment originates from an appropriate source
+
+    # Deploy to the github-pages environment
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

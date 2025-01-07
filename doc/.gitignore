@@ -1,6 +1,9 @@
 # Dependencies
 /node_modules
 
+# build markdowns
+/docs/reference
+
 # Production
 /build
 
