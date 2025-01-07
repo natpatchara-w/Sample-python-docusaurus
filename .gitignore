@@ -1,0 +1,20 @@
+# python virtual environment folder
+.venv
+
+# environment variables and secrets folder
+.env
+secrets
+
+# python cache and pytest cache
+__pycache__
+__pytest__
+
+# sling cache
+bin
+.sling.db*
+
+# dagster cache
+tmpf*
+
+#output db
+db/
