@@ -19,7 +19,7 @@ jobs:
 
       - name: Test with pytest
         run: |
-          pytest --junitxml=junit/testresults.xml --cov=src --cov-report=html
+          pytest --junitxml=junit/testresults.xml --cov=src --cov-report=html --cov-report=xml
 
       - name: Upload pytest test results
         uses: actions/upload-artifact@v4
@@ -29,6 +29,89 @@ jobs:
         # Use always() to always run this step to publish test results when there are test failures
         if: ${{ always() }}
 
+      - name: Upload pytest coverage results
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-coverage-results
+          path: coverage.xml
+        # Use always() to always run this step to publish test results when there are test failures
+        if: ${{ always() }}
+  
+  sonarqube:
+    runs-on: ubuntu-latest
+    needs:
+      - build-and-test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Disabling shallow clones is recommended for improving the relevancy of reporting
+          fetch-depth: 0
+      - name: Download pytest coverage results
+        uses: actions/download-artifact@v4
+        with:
+          name: pytest-coverage-results
+          path: .coverage-reports/
+        # Use always() to always run this step to publish test results when there are test failures
+        if: ${{ always() }}
+      - name: SonarQube Scan
+        uses: sonarsource/sonarqube-scan-action@v3
+        with:
+          args: >
+            -D sonar.organization=${{ secrets.sonarqube_org }}
+            -D sonar.projectKey=${{ secrets.sonarqube_project_key }}
+            -D sonar.sources=${{ env.SONARQUBE_SOURCES }}
+            -D sonar.qualitygate.wait=true
+            -D sonar.python.coverage.reportPaths=.coverage-reports/coverage.xml
+            ${{ env.SONARQUBE_ARGS }}
+        env:
+          SONAR_TOKEN: ${{ secrets.sonarqube_token }}
+          SONAR_HOST_URL: ${{ secrets.sonarqube_host }}
+      - name: Create SonarQube Report for DefectDojo
+        if: always()
+        run: |
+          # Install Sonar Report
+          mkdir -p ~/.local/bin
+          npm config set prefix '~/.local/'
+          npm install --global sonar-report@3.1.6
+
+          # Always run SAST Report from SonarQube
+          export PATH=~/.local/bin/:$PATH
+          # On SonarQube Community edition, you only can use main branch
+          sonar-report \
+            --sonarorganization="${{ secrets.sonarqube_org }}" \
+            --sonarurl="${{ secrets.sonarqube_host }}" \
+            --sonartoken="${{ secrets.sonarqube_token }}" \
+            --sonarcomponent="${{ secrets.sonarqube_project_key }}" \
+            --project="${{ secrets.sonarqube_project_key }}" \
+            --application="${{ secrets.sonarqube_project_key }}" \
+            --release="1.0" \
+            --output="sonar-report.html" \
+            --branch="main" \
+            > $SONAR_REPORT_OUTPUT_FILENAME 2>&1
+      - name: Publish Sonar Report Output to Summary
+        if: always()
+        run: |
+          if [[ -s $SONAR_REPORT_OUTPUT_FILENAME ]]; then
+            {
+              echo "### Sonar Report Output"
+              echo "<details><summary>Click to expand</summary>"
+              echo ""
+              echo '```terraform'
+              cat $SONAR_REPORT_OUTPUT_FILENAME
+              echo '```'
+              echo "</details>"
+            } >> $GITHUB_STEP_SUMMARY
+          fi
+      - name: Upload Sonar Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonar-report
+          path: sonar-report.html
+          retention-days: 30
+    env:
+      SONAR_REPORT_OUTPUT_FILENAME: sonar-report.txt
 
   show-result:
     runs-on: ubuntu-latest
